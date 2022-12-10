@@ -1,0 +1,151 @@
+1.Voting application created and below ID is showing in GUI:
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl apply -f .
+deployment.apps/db created
+service/db created
+deployment.apps/redis created
+service/redis created
+deployment.apps/result created
+service/result created
+deployment.apps/vote created
+service/vote created
+deployment.apps/worker created
+
+	==> Processed by container ID vote-94849dc97-wjzms
+
+
+2.Deleted voting Pod first and container ID gets change in GUI. 
+
+Note: If we remove voting pod then there is no effect in voting app and it works without any problem as it is first step of publishing data from voting pod to redis. When we delete a voting pod, the replica set assigns new voting pods instead of the deleted pods to show results.
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl delete pods vote-94849dc97-wjzms
+pod "vote-94849dc97-wjzms" deleted
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+db-b54cd94f4-sxtgz        2/2     Running   0          8m58s
+redis-868d64d78-zvssm     2/2     Running   0          8m58s
+result-5d57b59f4b-v479n   2/2     Running   0          8m58s
+vote-94849dc97-9ld78      2/2     Running   0          60s
+worker-dd46d7584-q59hc    2/2     Running   0          4m29s
+[root@ip-172-31-12-199 k8s-specifications]#
+
+
+ 	==> Processed by container ID vote-94849dc97-9ld78
+
+
+3.Then deleted worker pod and no any changes in container ID in GUI.
+Note: App is still working fine as replica set assigns new worker pods instead of deleted worker pods
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl delete pods worker-dd46d7584-q59hc
+pod "worker-dd46d7584-q59hc" deleted
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+db-b54cd94f4-sxtgz        2/2     Running   0          11m
+redis-868d64d78-zvssm     2/2     Running   0          11m
+result-5d57b59f4b-v479n   2/2     Running   0          11m
+vote-94849dc97-9ld78      2/2     Running   0          3m11s
+worker-dd46d7584-tb9gk    2/2     Running   0          2m
+
+
+4. Now delete DB POD using below commands:
+
+Note: Voting app GUI is working fine,showing voting result and able to show new vote count but new vote count is not showing in Voting GUI app because result pod is connected to DB and it is unable to fetch data because data is designed as "synchronus commmunication" to result app which means directly connect to data app through socket.
+There is no effect in the worker pod as it only works to push the data to the DB.
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl delete pods db-b54cd94f4-sxtgz
+pod "db-b54cd94f4-sxtgz" deleted
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+db-b54cd94f4-f7fnh        2/2     Running   0          73s
+redis-868d64d78-zvssm     2/2     Running   0          12m
+result-5d57b59f4b-v479n   2/2     Running   0          12m
+vote-94849dc97-9ld78      2/2     Running   0          4m33s
+worker-dd46d7584-tb9gk    2/2     Running   1          3m22s
+[root@ip-172-31-12-199 k8s-specifications]#
+
+
+Example:
+erver.js (socket connection)
+
+io.set('transports', ['polling']);
+var port = process.env.PORT || 4000;
+io.sockets.on('connection', function (socket) {
+ socket.emit('message', { text : 'Welcome!' });
+ socket.on('subscribe', function (data) {
+    socket.join(data.channel);
+  });
+
+
+If We have delete the db pod and new pod is created , it waits for a socket connection to the result app.
+So if we delete the db pod then we lose the previous data and logs as socket connection is established and no exception handling provision is given in server.js. 
+
+
+
+5.Solution to get result pod working
+
+There are 2 ways Result Pod works
+1. While designing data for result app we should give exception handling for better connection establishment. On the other hand in worker pod scenario we have to provide exception handling so that there is no problem on time.
+
+2. Restarting Result Pod:- In this scenario we delete the result pod and restart the process and then delete the db pod.
+
+--------------------------------------------------------------------------------------------------
+
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get all
+NAME                          READY   STATUS            RESTARTS   AGE
+pod/db-b54cd94f4-sxtgz        1/2     Running           0          8s
+pod/redis-868d64d78-zvssm     1/2     Running           0          8s
+pod/result-5d57b59f4b-v479n   1/2     Running           0          8s
+pod/vote-94849dc97-wjzms      1/2     Running           0          7s
+pod/worker-dd46d7584-5t7hn    0/2     PodInitializing   0          7s
+
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+service/db           ClusterIP   10.103.230.9     <none>        5432/TCP         8s
+service/kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP          3m14s
+service/redis        ClusterIP   10.111.214.208   <none>        6379/TCP         8s
+service/result       NodePort    10.110.161.200   <none>        5001:31001/TCP   7s
+service/vote         NodePort    10.104.82.36     <none>        5000:31000/TCP   7s
+
+NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/db       0/1     1            0           8s
+deployment.apps/redis    0/1     1            0           8s
+deployment.apps/result   0/1     1            0           8s
+deployment.apps/vote     0/1     1            0           7s
+deployment.apps/worker   0/1     1            0           7s
+
+NAME                                DESIRED   CURRENT   READY   AGE
+replicaset.apps/db-b54cd94f4        1         1         0       8s
+replicaset.apps/redis-868d64d78     1         1         0       8s
+replicaset.apps/result-5d57b59f4b   1         1         0       8s
+replicaset.apps/vote-94849dc97      1         1         0       7s
+replicaset.apps/worker-dd46d7584    1         1         0       7s
+[root@ip-172-31-12-199 k8s-specifications]#
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+db-b54cd94f4-sxtgz        2/2     Running   0          20s
+redis-868d64d78-zvssm     2/2     Running   0          20s
+result-5d57b59f4b-v479n   2/2     Running   0          20s
+vote-94849dc97-wjzms      2/2     Running   0          19s
+worker-dd46d7584-5t7hn    2/2     Running   0          19s
+[root@ip-172-31-12-199 k8s-specifications]#
+[root@ip-172-31-12-199 k8s-specifications]#
+[root@ip-172-31-12-199 k8s-specifications]#
+[root@ip-172-31-12-199 k8s-specifications]# kubectl get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+db-b54cd94f4-sxtgz        2/2     Running   0          2m40s
+redis-868d64d78-zvssm     2/2     Running   0          2m40s
+result-5d57b59f4b-v479n   2/2     Running   0          2m40s
+vote-94849dc97-wjzms      2/2     Running   0          2m39s
+worker-dd46d7584-5t7hn    2/2     Running   0          2m39s
+[root@ip-172-31-12-199 k8s-specifications]#
+
+
+
+
+
+
+
+
+

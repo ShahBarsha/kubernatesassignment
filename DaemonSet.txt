@@ -1,0 +1,69 @@
+1. Write a common use-case, where you will use a daemon set instead of replica set.
+
+DaemonSets create pods by default on each node in the cluster, unless the node selector constrains them and it is necessary to add the desired set of labels to a subset of nodes initially.
+
+Node selectors are part of the nodeSelector field within the DaemonSet YAML file.
+
+In the below yaml file, a DaemonSet is going to deploy nginx only on nodes labeled as type=developer
+
+Get it using the kubectl label command and Add the type=developer label to the "worker nodes" node with the following command:
+
+Command: kubectl label nodes <worker nodes> type=developer
+
+Filename: DemonSet_new.yml
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: developer
+spec:
+  selector:
+    matchLabels:
+      app: developer
+  template:
+    metadata:
+      labels:
+        app: developer
+    spec:
+      nodeSelector:
+        type: developer
+      containers:
+      - name: developer
+        image: nginx/Developer
+
+
+Adding the type=developer label to a new node is going to deploy the developer Pod to that node. If a label is removed from a node, the DaemonSet controller removes the Pod as well.
+---------------------------------------------------------------------------------------------------------
+Descibed Demaon Set:
+
+[root@ip-172-31-12-199 assignement1]# kubectl describe  ds developer
+Name:           developer
+Selector:       app=developer
+Node-Selector:  type=developer
+Labels:         <none>
+Annotations:    deprecated.daemonset.template.generation: 1
+Desired Number of Nodes Scheduled: 0
+Current Number of Nodes Scheduled: 0
+Number of Nodes Scheduled with Up-to-date Pods: 0
+Number of Nodes Scheduled with Available Pods: 0
+Number of Nodes Misscheduled: 0
+Pods Status:  0 Running / 0 Waiting / 0 Succeeded / 0 Failed
+Pod Template:
+  Labels:  app=developer
+  Containers:
+   developer:
+    Image:        nginx/Developer
+    Port:         <none>
+    Host Port:    <none>
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Events:           <none>
+[root@ip-172-31-12-199 assignement1]#
+
+
+-------------------------------------------------------------------------------------------------------------------
+[root@ip-172-31-12-199 assignement1]# kubectl get ds
+NAME                DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR    AGE
+developer           0         0         0       0            0           type=developer   27m
+

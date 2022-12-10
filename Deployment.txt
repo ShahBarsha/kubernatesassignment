@@ -1,0 +1,22 @@
+Below are the steps to update the container's image using deployment, ensuring there is zero downtime.
+
+
+1. We can update container images using deployment and ensuring there is zero downtime by changing  Min Ready Seconds value which specifies the minimum number of seconds for which a newly created Pod should be ready without any of its containers crashing.
+
+2. By default minReadySeconds value is set to 0. So, we need to increase or set the Min Ready Seconds value from '0' to '10' using below command. We are using this property to slow down our rollout process by having Kubernetes wait 10 seconds after a pod was ready.
+
+ ==> kubectl patch deployment kubia -p '{"spec": {"minReadySeconds": 10}}'
+
+In yaml file we can mentioned like below:
+
+minReadySeconds: 10 # by default is 0
+
+
+3. Command to check Min Ready Seconds value status:
+ ==> kubectl explain deploy.spec.minReadySeconds
+
+4. Then we need to upgrade the version using below command.This comamnd upgrade where container image nodejs is avaialble.
+ ==> kubectl set image deployment kubia nodejs=luksa/kubia:v2
+
+   	
+
